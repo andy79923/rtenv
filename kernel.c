@@ -2,7 +2,7 @@
 #include "RTOSConfig.h"
 
 #include "syscall.h"
-
+#include "command.h"
 
 #include <stddef.h>
 
@@ -324,8 +324,8 @@ void serial_readwrite_task()
 	int curr_char;
 	int done;
 
+    fdout = mq_open("/tmp/mqueue/out", 0);
 	fdin = open("/dev/tty0/in", 0);
-	fdout = open("/dev/tty0/out", 0);
 
 	/* Prepare the response message to be queued. */
 	memcpy(str, "Got:", 4);
@@ -360,43 +360,111 @@ void serial_readwrite_task()
 	}
 }
 
+void Hello(char* input)
+{
+    int fdout = mq_open("/tmp/mqueue/out", 0);
+    char *str = "Hello, World!\n\r";
+    write(fdout, str, strlen(str)+1);
+}
+
+int CommandNO(char* cmd)
+{
+    int i;
+    for(i = 0; i < CMDNUM; i++)
+    {
+        if(strcmp(cmd,cmdTable[i])==0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+//Handle input string
+void HandleInput(char* input)
+{
+    int i, j;
+    char splitStr[50][20];/*splitStr[0]:command
+                            splitStr[1]~splitStr[k]:options
+                            splitStr[k+1]~splitStr[n]:arguments
+                          */
+    int splitNum = 0;
+    int cmdNO;
+    int fdout = mq_open("/tmp/mqueue/out", 0);
+    for(i=0, j=0; input[i]!='\0' && j < 20; i++)
+    {
+        if(input[i] == ' ')
+        {
+            if(j != 0)
+            {
+                splitStr[splitNum++][j] = '\0';
+                j = 0;
+            }
+            continue;
+        }
+        splitStr[splitNum][j] = input[i];
+        j++;
+    }
+    splitStr[splitNum][j] = '\0';
+
+    cmdNO=CommandNO(splitStr[0]);
+    switch(cmdNO)
+    {
+        case HELP:
+            break;
+        case ECHO:
+            break;
+        case PS:
+            break;
+        case HELLO:
+            Hello(splitStr[1]);
+            break;
+        default:
+            write(fdout, splitStr[0], strlen(splitStr[0])+1);
+            write(fdout, ": command not found\n", 21);
+            break;
+    }
+
+}
+
 void Shell()
 {
 	int fdout, fdin;
 
 	char str[100];
-	char ch;
+	char* ch[]={'0','\0'};
 
 	int curr_char;
 	int done;
-	char pos[] = "rtenv:~$\0";
+	char pos[] = "\rrtenv:~$ ";
 	char newLine[] = "\n\r";
 
+    fdout = mq_open("/tmp/mqueue/out", 0);
 	fdin = open("/dev/tty0/in", 0);
-	fdout = open("/dev/tty0/out", 0);
 
 	while (1)
     {
-        write(fdout, pos, sizeof(pos));
+        write(fdout, pos, strlen(pos)+1);
 		curr_char = 0;
 		done = 0;
+		str[curr_char] = '\0';
 		do
         {
 			/* Receive a byte from the RS232 port (this call will
 			 * block). */
-			read(fdin, &ch, 1);
+			read(fdin, ch, 1);
 
 			/* If the byte is an end-of-line type character, then
 			 * finish the string and inidcate we are done.
 			 */
-			if (curr_char >= 98 || (ch == '\r') || (ch == '\n'))
+			if (curr_char >= 98 || (ch[0] == '\r') || (ch[0] == '\n'))
             {
 				str[curr_char] = '\0';
 				done = -1;
 				/* Otherwise, add the character to the
 				 * response string. */
 			}
-			else if(ch == 127)//press the backspace key
+			else if(ch[0] == 127)//press the backspace key
             {
                 if(curr_char!=0)
                 {
@@ -406,31 +474,34 @@ void Shell()
                     write(fdout, "\b", 1);
                 }
             }
-            else if(ch == 27)//press up, down, left, right, home, page up, delete, end, page down
+            else if(ch[0] == 27)//press up, down, left, right, home, page up, delete, end, page down
             {
-                read(fdin, &ch, 1);
-                if(ch != '[')
+                read(fdin, ch, 1);
+                if(ch[0] != '[')
                 {
                     str[curr_char++] = ch;
-                    write(fdout, &ch, 1);
+                    write(fdout, ch, 2);
                 }
                 else
                 {
-                    read(fdin, &ch, 1);
-                    if(ch >= '1' && ch <= '6')
+                    read(fdin, ch[0], 1);
+                    if(ch[0] >= '1' && ch[0] <= '6')
                     {
-                        read(fdin, &ch, 1);
+                        read(fdin, ch, 1);
                     }
                 }
             }
 			else
             {
-				str[curr_char++] = ch;
-				write(fdout, &ch, 1);
+				str[curr_char++] = ch[0];
+				write(fdout, ch, 2);
 			}
 		} while (!done);
-        write(fdout, newLine, strlen(newLine));
-
+        write(fdout, newLine, strlen(newLine)+1);
+        if(strlen(str)>0)
+        {
+            HandleInput(str);
+        }
 	}
 }
 
