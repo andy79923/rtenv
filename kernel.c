@@ -254,7 +254,7 @@ void greeting()
 	}
 }
 
-void echo()
+/*void echo()
 {
 	int fdout, fdin;
 	char c;
@@ -265,7 +265,7 @@ void echo()
 		read(fdin, &c, 1);
 		write(fdout, &c, 1);
 	}
-}
+}*/
 
 void rs232_xmit_msg_task()
 {
@@ -360,10 +360,23 @@ void serial_readwrite_task()
 	}
 }
 
-void Hello(char* input)
+void echo(char splitInput[][20], int splitNum)
 {
     int fdout = mq_open("/tmp/mqueue/out", 0);
-    char *str = "Hello, World!\n\r";
+    int i=1;
+    while(splitInput[i][0] == '-' && i < splitNum)i++;
+    for(; i < splitNum; i++)
+    {
+        write(fdout, splitInput[i], strlen(splitInput[i])+1);
+        write(fdout, " ", 2);
+    }
+    write(fdout, "\n", 2);
+}
+
+void hello(char splitInput[][20], int splitNum)
+{
+    int fdout = mq_open("/tmp/mqueue/out", 0);
+    char *str = "Hello, World!\n";
     write(fdout, str, strlen(str)+1);
 }
 
@@ -405,7 +418,7 @@ void HandleInput(char* input)
         splitStr[splitNum][j] = input[i];
         j++;
     }
-    splitStr[splitNum][j] = '\0';
+    splitStr[splitNum++][j] = '\0';
 
     cmdNO=CommandNO(splitStr[0]);
     switch(cmdNO)
@@ -413,11 +426,14 @@ void HandleInput(char* input)
         case HELP:
             break;
         case ECHO:
+            echo(splitStr,splitNum);
+            /*write(fdout, splitStr[1], strlen(splitStr[1])+1);
+            write(fdout, "\n", 2);*/
             break;
         case PS:
             break;
         case HELLO:
-            Hello(splitStr[1]);
+            hello(splitStr,splitNum);
             break;
         default:
             write(fdout, splitStr[0], strlen(splitStr[0])+1);
