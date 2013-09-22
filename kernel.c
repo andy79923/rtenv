@@ -3,6 +3,7 @@
 
 #include "syscall.h"
 
+
 #include <stddef.h>
 
 void *memcpy(void *dest, const void *src, size_t n);
@@ -55,7 +56,7 @@ void puts(char *s)
 #define PATH_MAX   32 /* Longest absolute path */
 #define PIPE_LIMIT (TASK_LIMIT * 2)
 
-#define PATHSERVER_FD (TASK_LIMIT + 3) 
+#define PATHSERVER_FD (TASK_LIMIT + 3)
 	/* File descriptor of pipe to pathserver */
 
 #define PRIORITY_DEFAULT 20
@@ -105,7 +106,7 @@ struct task_control_block {
     struct task_control_block  *next;
 };
 
-/* 
+/*
  * pathserver assumes that all files are FIFOs that were registered
  * with mkfifo.  It also assumes a global tables of FDs shared by all
  * processes.  It would have to get much smarter to be generally useful.
@@ -317,13 +318,14 @@ void queue_str_task2()
 void serial_readwrite_task()
 {
 	int fdout, fdin;
+
 	char str[100];
 	char ch;
 	int curr_char;
 	int done;
 
-	fdout = mq_open("/tmp/mqueue/out", 0);
 	fdin = open("/dev/tty0/in", 0);
+	fdout = open("/dev/tty0/out", 0);
 
 	/* Prepare the response message to be queued. */
 	memcpy(str, "Got:", 4);
@@ -358,6 +360,81 @@ void serial_readwrite_task()
 	}
 }
 
+void Shell()
+{
+	int fdout, fdin;
+
+	char str[100];
+	char ch;
+
+	int curr_char;
+	int done;
+	char pos[] = "rtenv:~$\0";
+	char newLine[] = "\n\r";
+
+	fdin = open("/dev/tty0/in", 0);
+	fdout = open("/dev/tty0/out", 0);
+
+	while (1)
+    {
+        write(fdout, pos, sizeof(pos));
+		curr_char = 0;
+		done = 0;
+		do
+        {
+			/* Receive a byte from the RS232 port (this call will
+			 * block). */
+			read(fdin, &ch, 1);
+
+			/* If the byte is an end-of-line type character, then
+			 * finish the string and inidcate we are done.
+			 */
+			if (curr_char >= 98 || (ch == '\r') || (ch == '\n'))
+            {
+				str[curr_char] = '\0';
+				done = -1;
+				/* Otherwise, add the character to the
+				 * response string. */
+			}
+			else if(ch == 127)//press the backspace key
+            {
+                if(curr_char!=0)
+                {
+                    curr_char--;
+                    write(fdout, "\b", 1);
+                    write(fdout, " ", 1);
+                    write(fdout, "\b", 1);
+                }
+            }
+            else if(ch == 27)//press up, down, left, right, home, page up, delete, end, page down
+            {
+                read(fdin, &ch, 1);
+                if(ch != '[')
+                {
+                    str[curr_char++] = ch;
+                    write(fdout, &ch, 1);
+                }
+                else
+                {
+                    read(fdin, &ch, 1);
+                    if(ch >= '1' && ch <= '6')
+                    {
+                        read(fdin, &ch, 1);
+                    }
+                }
+            }
+			else
+            {
+				str[curr_char++] = ch;
+				write(fdout, &ch, 1);
+			}
+		} while (!done);
+        write(fdout, newLine, strlen(newLine));
+
+	}
+}
+
+
 void first()
 {
 	setpriority(0, 0);
@@ -366,9 +443,10 @@ void first()
 	if (!fork()) setpriority(0, 0), serialout(USART2, USART2_IRQn);
 	if (!fork()) setpriority(0, 0), serialin(USART2, USART2_IRQn);
 	if (!fork()) rs232_xmit_msg_task();
-	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task1();
-	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task2();
-	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), serial_readwrite_task();
+	//if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task1();
+	//if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task2();
+	//if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), serial_readwrite_task();
+	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), Shell();
 
 	setpriority(0, PRIORITY_LIMIT);
 
