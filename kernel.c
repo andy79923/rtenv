@@ -358,7 +358,70 @@ void serial_readwrite_task()
 		 */
 		write(fdout, str, curr_char+1+1);
 	}
+}
 
+char* itoa(int value, char* str)//only support base=10
+{
+    int base = 10;
+    int divideNum = base;
+    int i=0;
+    while(value/divideNum > 0)
+    {
+        divideNum*=base;
+    }
+    if(value < 0)
+    {
+        str[0] = '-';
+        i++;
+    }
+    while(divideNum/base > 0)
+    {
+        divideNum/=base;
+        str[i++]=value/divideNum+48;
+        value%=divideNum;
+    }
+    str[i]='\0';
+    return str;
+
+}
+
+void ps(char splitInput[][20], int splitNum)
+{
+    int fdout = mq_open("/tmp/mqueue/out", 0);
+    const struct task_control_block tasks[TASK_LIMIT];
+    int taskCount,i;
+    getProcessInfo(tasks,&taskCount);
+    char str[10];
+    write(fdout, "Pid\tStatus\t\tPriority\n\r", 24);
+    for(i = 0; i < taskCount; i++)
+    {
+        itoa(tasks[i].pid, str);
+        write(fdout, str, strlen(str)+1);
+        write(fdout, "\t", 2);
+        switch(tasks[i].status)
+        {
+            case TASK_READY:
+                write(fdout, "TASK READY\t", 12);
+                break;
+            case TASK_WAIT_READ:
+                write(fdout, "TASK WAIT READ\t", 16);
+                break;
+            case TASK_WAIT_WRITE:
+                write(fdout, "TASK WAIT WRITE\t", 17);
+                break;
+            case TASK_WAIT_INTR:
+                write(fdout, "TASK WAIT INTR\t", 16);
+                break;
+            case TASK_WAIT_TIME:
+                write(fdout, "TASK WAIT TIME\t", 16);
+                break;
+            default:
+                break;
+        }
+        itoa(tasks[i].priority, str);
+        write(fdout, str, strlen(str)+1);
+        write(fdout, "\n\r",3);
+    }
 }
 
 void echo(char splitInput[][20], int splitNum)
@@ -428,10 +491,9 @@ void HandleInput(char* input)
             break;
         case ECHO:
             echo(splitStr,splitNum);
-            /*write(fdout, splitStr[1], strlen(splitStr[1])+1);
-            write(fdout, "\n", 2);*/
             break;
         case PS:
+            ps(splitStr,splitNum);
             break;
         case HELLO:
             hello(splitStr,splitNum);
@@ -484,9 +546,7 @@ void Shell()
                 if(curr_char!=0)
                 {
                     curr_char--;
-                    write(fdout, "\b", 1);
-                    write(fdout, " ", 1);
-                    write(fdout, "\b", 1);
+                    write(fdout, "\b \b", 4);
                 }
             }
             else if(ch[0] == 27)//press up, down, left, right, home, page up, delete, end, page down
@@ -954,6 +1014,17 @@ int main()
 				tasks[current_task].status = TASK_WAIT_TIME;
 			}
 			break;
+        case 0xa:
+            {
+                struct task_control_block* tempTasks=tasks[current_task].stack->r0;
+                for(i = 0; i < task_count; i++)
+                {
+                    tempTasks[i]=tasks[i];
+                }
+                int* taskCount=tasks[current_task].stack->r1;
+                *taskCount=task_count;
+            }
+            break;
 		default: /* Catch all interrupts */
 			if ((int)tasks[current_task].stack->r7 < 0) {
 				unsigned int intr = -tasks[current_task].stack->r7 - 16;

@@ -16,3 +16,5 @@ int setpriority(int who, int value);
 int mknod(int fd, int mode, int dev);
 
 void sleep(unsigned int);
+
+void getProcessInfo(const struct task_control_block* constTasks, int taskCount);
