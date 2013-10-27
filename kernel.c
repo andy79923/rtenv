@@ -444,19 +444,6 @@ void hello(char splitInput[][20], int splitNum)
     write(fdout, str, strlen(str)+1);
 }
 
-int CommandNO(char* cmd)
-{
-    int i;
-    for(i = 0; i < CMDNUM; i++)
-    {
-        if(strcmp(cmd,cmdTable[i])==0)
-        {
-            return i;
-        }
-    }
-    return -1;
-}
-
 //Handle input string
 void HandleInput(char* input)
 {
@@ -484,25 +471,17 @@ void HandleInput(char* input)
     }
     splitStr[splitNum++][j] = '\0';
 
-    cmdNO=CommandNO(splitStr[0]);
-    switch(cmdNO)
+    int cmd_num = sizeof(cmd)/sizeof(cmd_type);
+    for(i = 0; i < cmd_num; i++)
     {
-        case HELP:
-            break;
-        case ECHO:
-            echo(splitStr,splitNum);
-            break;
-        case PS:
-            ps(splitStr,splitNum);
-            break;
-        case HELLO:
-            hello(splitStr,splitNum);
-            break;
-        default:
-            write(fdout, splitStr[0], strlen(splitStr[0])+1);
-            write(fdout, ": command not found\n", 21);
-            break;
+        if(strcmp(splitStr[0], cmd[i].name) == 0)
+        {
+            cmd[i].handler(splitStr, splitNum);
+            return;
+        }
     }
+    write(fdout, splitStr[0], strlen(splitStr[0])+1);
+    write(fdout, ": command not found\n", 21);
 }
 
 void Shell()
