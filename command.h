@@ -27,4 +27,9 @@ static cmd_type cmd[]={
     }
 };
 
+void ps(char splitInput[][20], int splitNum);
+void echo(char splitInput[][20], int splitNum);
+void hello(char splitInput[][20], int splitNum);
+
+
 #endif
